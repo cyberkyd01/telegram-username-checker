@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Telegram Username Checker</title>
+    <style>
+      :root {
+        --bg: #0f1621;
+        --panel: #17212b;
+        --panel-2: #1d2a38;
+        --text: #e8edf2;
+        --muted: #8a9aa9;
+        --accent: #2aabee;
+        --accent-2: #229ed9;
+        --ok: #4bb34b;
+        --warn: #e8a13b;
+        --err: #e5484d;
+        --border: #24313f;
+        --radius: 12px;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: radial-gradient(1200px 600px at 50% -10%, #1b2a3a, var(--bg));
+        color: var(--text);
+        min-height: 100vh;
+        padding: 32px 16px;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; }
+      header { text-align: center; margin-bottom: 24px; }
+      .logo {
+        width: 56px; height: 56px; border-radius: 50%;
+        background: linear-gradient(180deg, var(--accent), var(--accent-2));
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 28px; margin-bottom: 12px;
+      }
+      h1 { margin: 0 0 6px; font-size: 24px; }
+      .sub { color: var(--muted); font-size: 14px; margin: 0; }
+      .card {
+        background: var(--panel); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 20px; margin-top: 20px;
+      }
+      label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+      textarea {
+        width: 100%; min-height: 120px; resize: vertical;
+        background: var(--panel-2); color: var(--text);
+        border: 1px solid var(--border); border-radius: 10px;
+        padding: 12px 14px; font-size: 15px; font-family: inherit; line-height: 1.5;
+      }
+      textarea:focus { outline: none; border-color: var(--accent); }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+      .hint { color: var(--muted); font-size: 12px; }
+      button {
+        background: linear-gradient(180deg, var(--accent), var(--accent-2));
+        color: white; border: 0; border-radius: 10px;
+        padding: 11px 22px; font-size: 15px; font-weight: 600; cursor: pointer;
+        transition: transform .05s ease, opacity .2s ease;
+      }
+      button:hover { opacity: .95; }
+      button:active { transform: translateY(1px); }
+      button:disabled { opacity: .5; cursor: not-allowed; }
+      .results { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+      .result {
+        display: flex; align-items: center; gap: 12px;
+        background: var(--panel); border: 1px solid var(--border);
+        border-radius: 10px; padding: 12px 14px;
+      }
+      .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+      .result .name { font-weight: 600; }
+      .result .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+      .result a { color: var(--accent); text-decoration: none; }
+      .result a:hover { text-decoration: underline; }
+      .badge {
+        margin-left: auto; font-size: 12px; font-weight: 600;
+        padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+      }
+      .taken     { color: var(--ok);  background: rgba(75,179,75,.12); }
+      .available { color: var(--accent); background: rgba(42,171,238,.12); }
+      .invalid   { color: var(--warn); background: rgba(232,161,59,.12); }
+      .error     { color: var(--err); background: rgba(229,72,77,.12); }
+      .s-taken .dot { background: var(--ok); }
+      .s-available .dot { background: var(--accent); }
+      .s-invalid .dot { background: var(--warn); }
+      .s-error .dot { background: var(--err); }
+      footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 28px; line-height: 1.6; }
+      .spin { display: inline-block; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.4);
+        border-top-color: #fff; border-radius: 50%; animation: s .7s linear infinite; vertical-align: -2px; margin-right: 8px; }
+      @keyframes s { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="logo">✈️</div>
+        <h1>Telegram Username Checker</h1>
+        <p class="sub">Check whether public Telegram usernames are registered or available.</p>
+      </header>
+
+      <div class="card">
+        <label for="input">Usernames (one per line — <code>@name</code>, <code>name</code>, or a <code>t.me/name</code> link)</label>
+        <textarea id="input" placeholder="durov&#10;telegram&#10;@somehandle&#10;t.me/anotherone"></textarea>
+        <div class="row">
+          <span class="hint">Up to 50 at a time · public info only</span>
+          <button id="go">Check</button>
+        </div>
+      </div>
+
+      <div class="results" id="results"></div>
+
+      <footer>
+        Uses Telegram's public <code>t.me</code> preview — the same information anyone sees visiting the link.<br />
+        For checking your own contacts, use Telegram's built-in contact sync instead.
+      </footer>
+    </div>
+
+    <script>
+      const btn = document.getElementById("go");
+      const input = document.getElementById("input");
+      const out = document.getElementById("results");
+
+      const STATUS_LABEL = {
+        taken: "Registered",
+        available: "Available",
+        invalid: "Invalid",
+        error: "Error",
+      };
+
+      function render(results) {
+        out.innerHTML = "";
+        for (const r of results) {
+          const el = document.createElement("div");
+          el.className = `result s-${r.status}`;
+
+          const dot = document.createElement("span");
+          dot.className = "dot";
+          el.appendChild(dot);
+
+          const body = document.createElement("div");
+          const title = document.createElement("div");
+          title.className = "name";
+          title.textContent = r.displayName || r.username || r.input;
+          body.appendChild(title);
+
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          if (r.status === "taken") {
+            meta.innerHTML =
+              `@${r.username}` +
+              (r.type ? ` · ${r.type}` : "") +
+              ` · <a href="${r.link}" target="_blank" rel="noopener">open</a>`;
+          } else if (r.status === "available") {
+            meta.textContent = `@${r.username} — no account found`;
+          } else {
+            meta.textContent = r.detail || "";
+          }
+          body.appendChild(meta);
+          el.appendChild(body);
+
+          const badge = document.createElement("span");
+          badge.className = `badge ${r.status}`;
+          badge.textContent = STATUS_LABEL[r.status] || r.status;
+          el.appendChild(badge);
+
+          out.appendChild(el);
+        }
+      }
+
+      async function run() {
+        const usernames = input.value
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        if (usernames.length === 0) {
+          out.innerHTML = `<div class="result s-invalid"><span class="dot"></span><div><div class="name">Nothing to check</div><div class="meta">Enter at least one username.</div></div></div>`;
+          return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spin"></span>Checking…`;
+        try {
+          const res = await fetch("/api/check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ usernames }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Request failed");
+          render(data.results);
+        } catch (err) {
+          out.innerHTML = `<div class="result s-error"><span class="dot"></span><div><div class="name">Something went wrong</div><div class="meta">${err.message}</div></div></div>`;
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Check";
+        }
+      }
+
+      btn.addEventListener("click", run);
+      input.addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run();
+      });
+    </script>
+  </body>
+</html>
