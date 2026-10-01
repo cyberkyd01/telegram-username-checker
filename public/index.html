@@ -129,7 +129,7 @@
         <div class="uploader">
           <label class="file-btn" for="file">Choose .txt / .csv</label>
           <input id="file" type="file" accept=".txt,.csv,text/plain,text/csv" />
-          <span class="file-name" id="fileName">or paste above — a file adds its names to the list</span>
+          <span class="file-name" id="fileName">CSV must be a single column of usernames · .txt is one per line</span>
         </div>
 
         <div class="row">
@@ -181,13 +181,59 @@
         error: "Error",
       };
 
-      // Pull candidate usernames out of free text or CSV:
+      const HEADER_WORDS = new Set([
+        "username", "usernames", "handle", "handles", "name", "names", "user", "users",
+      ]);
+
+      // Pull candidate usernames out of a plain .txt file:
       // split on newlines, commas, semicolons, tabs and spaces.
       function parseTokens(text) {
         return text
           .split(/[\r\n,;\t ]+/)
           .map((s) => s.trim())
           .filter(Boolean);
+      }
+
+      // Split one CSV line into fields, honouring simple double-quoting.
+      function splitCsvLine(line) {
+        const out = [];
+        let cur = "";
+        let inQ = false;
+        for (let i = 0; i < line.length; i++) {
+          const c = line[i];
+          if (inQ) {
+            if (c === '"') {
+              if (line[i + 1] === '"') { cur += '"'; i++; }
+              else inQ = false;
+            } else cur += c;
+          } else if (c === '"') {
+            inQ = true;
+          } else if (c === ",") {
+            out.push(cur);
+            cur = "";
+          } else {
+            cur += c;
+          }
+        }
+        out.push(cur);
+        return out;
+      }
+
+      // Parse a CSV, requiring exactly one column.
+      // Returns { values } on success, or { badLine, badCols } if any
+      // non-empty row has more than one column.
+      function parseCsvSingleColumn(text) {
+        const lines = text.split(/\r?\n/);
+        const values = [];
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].trim() === "") continue;
+          const fields = splitCsvLine(lines[i]);
+          // Ignore trailing empty cells (e.g. a stray trailing comma).
+          while (fields.length && fields[fields.length - 1].trim() === "") fields.pop();
+          if (fields.length > 1) return { badLine: i + 1, badCols: fields.length };
+          values.push((fields[0] || "").trim());
+        }
+        return { values };
       }
 
       function currentUsernames() {
@@ -210,21 +256,52 @@
 
       input.addEventListener("input", refreshCount);
 
+      function setFileMsg(text, isError) {
+        fileName.textContent = text;
+        fileName.style.color = isError ? "var(--warn)" : "";
+      }
+
       fileInput.addEventListener("change", async () => {
         const file = fileInput.files[0];
         if (!file) return;
         const text = await file.text();
-        const tokens = parseTokens(text);
+        const isCsv = /\.csv$/i.test(file.name) || file.type === "text/csv";
+
+        let tokens;
+        if (isCsv) {
+          const parsed = parseCsvSingleColumn(text);
+          if (parsed.badLine) {
+            setFileMsg(
+              `${file.name} — rejected: line ${parsed.badLine} has ${parsed.badCols} columns. The CSV must have exactly one column of usernames.`,
+              true
+            );
+            fileInput.value = "";
+            return;
+          }
+          tokens = parsed.values.filter(Boolean);
+        } else {
+          tokens = parseTokens(text);
+        }
+
+        // Drop a leading header cell like "username" if present.
+        if (tokens.length && HEADER_WORDS.has(tokens[0].toLowerCase())) tokens.shift();
+
+        if (tokens.length === 0) {
+          setFileMsg(`${file.name} — no usernames found in the file.`, true);
+          fileInput.value = "";
+          return;
+        }
+
         const existing = input.value.trim();
         input.value = (existing ? existing + "\n" : "") + tokens.join("\n");
-        fileName.textContent = `${file.name} — added ${tokens.length} entries`;
+        setFileMsg(`${file.name} — added ${tokens.length} usernames`, false);
         refreshCount();
         fileInput.value = ""; // allow re-selecting the same file
       });
 
       clearBtn.addEventListener("click", () => {
         input.value = "";
-        fileName.textContent = "or paste above — a file adds its names to the list";
+        setFileMsg("CSV must be a single column of usernames · .txt is one per line", false);
         resultsWrap.style.display = "none";
         out.innerHTML = "";
         lastResults = [];

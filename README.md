@@ -11,9 +11,13 @@ Useful for:
 
 ## Features
 
-- Paste usernames (one per line) **or upload a `.txt` / `.csv` file** — the app
-  extracts usernames split on newlines, commas, semicolons, tabs or spaces, and
-  de-duplicates them.
+- Paste usernames (one per line) **or upload a file**:
+  - **`.csv`** must have **exactly one column** of usernames (a multi-column
+    file is rejected with the offending line number). A leading `username`
+    header row is ignored.
+  - **`.txt`** is treated as one username per line (also split on commas,
+    semicolons, tabs and spaces).
+  - Entries are de-duplicated.
 - Accepts `name`, `@name`, or `t.me/name` forms.
 - **Download results as CSV** (`input, username, status, available, display_name,
   type, link`) for easy filtering by available vs. registered.
