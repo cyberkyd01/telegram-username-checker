@@ -9,6 +9,16 @@ Useful for:
 - Picking a new, unused handle for yourself, a bot, or a channel.
 - Verifying that a known public account/channel username resolves.
 
+## Features
+
+- Paste usernames (one per line) **or upload a `.txt` / `.csv` file** — the app
+  extracts usernames split on newlines, commas, semicolons, tabs or spaces, and
+  de-duplicates them.
+- Accepts `name`, `@name`, or `t.me/name` forms.
+- **Download results as CSV** (`input, username, status, available, display_name,
+  type, link`) for easy filtering by available vs. registered.
+- Large lists are processed in polite batches of 50 with a progress bar.
+
 ## What it does **not** do
 
 This tool intentionally only resolves **public usernames**. It does not look up

@@ -50,8 +50,9 @@
         padding: 12px 14px; font-size: 15px; font-family: inherit; line-height: 1.5;
       }
       textarea:focus { outline: none; border-color: var(--accent); }
-      .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
       .hint { color: var(--muted); font-size: 12px; }
+      .actions { display: flex; gap: 10px; align-items: center; }
       button {
         background: linear-gradient(180deg, var(--accent), var(--accent-2));
         color: white; border: 0; border-radius: 10px;
@@ -61,7 +62,28 @@
       button:hover { opacity: .95; }
       button:active { transform: translateY(1px); }
       button:disabled { opacity: .5; cursor: not-allowed; }
-      .results { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+      button.ghost {
+        background: transparent; border: 1px solid var(--border); color: var(--text);
+        font-weight: 500;
+      }
+      .uploader {
+        display: flex; align-items: center; gap: 12px; margin-top: 14px;
+        padding: 12px 14px; border: 1px dashed var(--border); border-radius: 10px;
+        background: var(--panel-2);
+      }
+      .uploader label { margin: 0; }
+      .file-btn {
+        display: inline-block; cursor: pointer; font-size: 14px; font-weight: 600;
+        color: var(--accent); background: rgba(42,171,238,.1);
+        padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(42,171,238,.3);
+      }
+      .file-btn:hover { background: rgba(42,171,238,.18); }
+      #file { display: none; }
+      .file-name { color: var(--muted); font-size: 13px; }
+      .results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 22px; flex-wrap: wrap; }
+      .summary { color: var(--muted); font-size: 13px; }
+      .summary b { color: var(--text); }
+      .results { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
       .result {
         display: flex; align-items: center; gap: 12px;
         background: var(--panel); border: 1px solid var(--border);
@@ -84,6 +106,8 @@
       .s-available .dot { background: var(--accent); }
       .s-invalid .dot { background: var(--warn); }
       .s-error .dot { background: var(--err); }
+      .progress { height: 6px; border-radius: 999px; background: var(--panel-2); overflow: hidden; margin-top: 12px; display: none; }
+      .progress > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .2s ease; }
       footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 28px; line-height: 1.6; }
       .spin { display: inline-block; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.4);
         border-top-color: #fff; border-radius: 50%; animation: s .7s linear infinite; vertical-align: -2px; margin-right: 8px; }
@@ -101,13 +125,30 @@
       <div class="card">
         <label for="input">Usernames (one per line — <code>@name</code>, <code>name</code>, or a <code>t.me/name</code> link)</label>
         <textarea id="input" placeholder="durov&#10;telegram&#10;@somehandle&#10;t.me/anotherone"></textarea>
-        <div class="row">
-          <span class="hint">Up to 50 at a time · public info only</span>
-          <button id="go">Check</button>
+
+        <div class="uploader">
+          <label class="file-btn" for="file">Choose .txt / .csv</label>
+          <input id="file" type="file" accept=".txt,.csv,text/plain,text/csv" />
+          <span class="file-name" id="fileName">or paste above — a file adds its names to the list</span>
         </div>
+
+        <div class="row">
+          <span class="hint" id="count">0 usernames ready · public info only</span>
+          <div class="actions">
+            <button class="ghost" id="clear">Clear</button>
+            <button id="go">Check</button>
+          </div>
+        </div>
+        <div class="progress" id="progress"><i></i></div>
       </div>
 
-      <div class="results" id="results"></div>
+      <div id="resultsWrap" style="display:none">
+        <div class="results-head">
+          <span class="summary" id="summary"></span>
+          <button class="ghost" id="download">Download CSV</button>
+        </div>
+        <div class="results" id="results"></div>
+      </div>
 
       <footer>
         Uses Telegram's public <code>t.me</code> preview — the same information anyone sees visiting the link.<br />
@@ -119,6 +160,19 @@
       const btn = document.getElementById("go");
       const input = document.getElementById("input");
       const out = document.getElementById("results");
+      const resultsWrap = document.getElementById("resultsWrap");
+      const summary = document.getElementById("summary");
+      const downloadBtn = document.getElementById("download");
+      const fileInput = document.getElementById("file");
+      const fileName = document.getElementById("fileName");
+      const countEl = document.getElementById("count");
+      const clearBtn = document.getElementById("clear");
+      const progress = document.getElementById("progress");
+      const progressBar = progress.querySelector("i");
+
+      const BATCH_SIZE = 50; // matches the server's per-request cap
+      const MAX_TOTAL = 1000; // sane ceiling for a public-info tool
+      let lastResults = [];
 
       const STATUS_LABEL = {
         taken: "Registered",
@@ -126,6 +180,56 @@
         invalid: "Invalid",
         error: "Error",
       };
+
+      // Pull candidate usernames out of free text or CSV:
+      // split on newlines, commas, semicolons, tabs and spaces.
+      function parseTokens(text) {
+        return text
+          .split(/[\r\n,;\t ]+/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+
+      function currentUsernames() {
+        const seen = new Set();
+        const list = [];
+        for (const t of parseTokens(input.value)) {
+          const key = t.toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            list.push(t);
+          }
+        }
+        return list;
+      }
+
+      function refreshCount() {
+        const n = currentUsernames().length;
+        countEl.textContent = `${n} username${n === 1 ? "" : "s"} ready · public info only`;
+      }
+
+      input.addEventListener("input", refreshCount);
+
+      fileInput.addEventListener("change", async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        const text = await file.text();
+        const tokens = parseTokens(text);
+        const existing = input.value.trim();
+        input.value = (existing ? existing + "\n" : "") + tokens.join("\n");
+        fileName.textContent = `${file.name} — added ${tokens.length} entries`;
+        refreshCount();
+        fileInput.value = ""; // allow re-selecting the same file
+      });
+
+      clearBtn.addEventListener("click", () => {
+        input.value = "";
+        fileName.textContent = "or paste above — a file adds its names to the list";
+        resultsWrap.style.display = "none";
+        out.innerHTML = "";
+        lastResults = [];
+        refreshCount();
+      });
 
       function render(results) {
         out.innerHTML = "";
@@ -167,33 +271,113 @@
         }
       }
 
+      function renderSummary(results) {
+        const by = { taken: 0, available: 0, invalid: 0, error: 0 };
+        for (const r of results) by[r.status] = (by[r.status] || 0) + 1;
+        summary.innerHTML =
+          `<b>${results.length}</b> checked · ` +
+          `<b>${by.available}</b> available · ` +
+          `<b>${by.taken}</b> registered · ` +
+          `<b>${by.invalid}</b> invalid · ` +
+          `<b>${by.error}</b> errors`;
+      }
+
+      function csvEscape(v) {
+        const s = v == null ? "" : String(v);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      }
+
+      function toCsv(results) {
+        const header = ["input", "username", "status", "available", "display_name", "type", "link"];
+        const rows = results.map((r) =>
+          [
+            r.input,
+            r.username || "",
+            r.status,
+            r.status === "available" ? "yes" : r.status === "taken" ? "no" : "",
+            r.displayName || "",
+            r.type || "",
+            r.link || "",
+          ]
+            .map(csvEscape)
+            .join(",")
+        );
+        return [header.join(","), ...rows].join("\r\n");
+      }
+
+      downloadBtn.addEventListener("click", () => {
+        if (!lastResults.length) return;
+        const blob = new Blob([toCsv(lastResults)], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        a.href = url;
+        a.download = `telegram-username-results-${stamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      });
+
+      async function checkBatch(usernames) {
+        const res = await fetch("/api/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ usernames }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Request failed");
+        return data.results;
+      }
+
       async function run() {
-        const usernames = input.value
-          .split(/\r?\n/)
-          .map((s) => s.trim())
-          .filter(Boolean);
+        let usernames = currentUsernames();
 
         if (usernames.length === 0) {
-          out.innerHTML = `<div class="result s-invalid"><span class="dot"></span><div><div class="name">Nothing to check</div><div class="meta">Enter at least one username.</div></div></div>`;
+          resultsWrap.style.display = "block";
+          summary.textContent = "";
+          out.innerHTML = `<div class="result s-invalid"><span class="dot"></span><div><div class="name">Nothing to check</div><div class="meta">Enter or upload at least one username.</div></div></div>`;
+          return;
+        }
+        if (usernames.length > MAX_TOTAL) {
+          resultsWrap.style.display = "block";
+          out.innerHTML = `<div class="result s-invalid"><span class="dot"></span><div><div class="name">Too many usernames</div><div class="meta">Limit is ${MAX_TOTAL} per run — you have ${usernames.length}.</div></div></div>`;
           return;
         }
 
         btn.disabled = true;
+        clearBtn.disabled = true;
         btn.innerHTML = `<span class="spin"></span>Checking…`;
+        resultsWrap.style.display = "block";
+        out.innerHTML = "";
+        lastResults = [];
+
+        const showProgress = usernames.length > BATCH_SIZE;
+        if (showProgress) {
+          progress.style.display = "block";
+          progressBar.style.width = "0%";
+        }
+
         try {
-          const res = await fetch("/api/check", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ usernames }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "Request failed");
-          render(data.results);
+          const all = [];
+          for (let i = 0; i < usernames.length; i += BATCH_SIZE) {
+            const chunk = usernames.slice(i, i + BATCH_SIZE);
+            const results = await checkBatch(chunk);
+            all.push(...results);
+            lastResults = all.slice();
+            render(all);
+            renderSummary(all);
+            if (showProgress) {
+              progressBar.style.width = `${Math.round((all.length / usernames.length) * 100)}%`;
+            }
+          }
         } catch (err) {
           out.innerHTML = `<div class="result s-error"><span class="dot"></span><div><div class="name">Something went wrong</div><div class="meta">${err.message}</div></div></div>`;
         } finally {
           btn.disabled = false;
+          clearBtn.disabled = false;
           btn.textContent = "Check";
+          setTimeout(() => (progress.style.display = "none"), 600);
         }
       }
 
@@ -201,6 +385,8 @@
       input.addEventListener("keydown", (e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run();
       });
+
+      refreshCount();
     </script>
   </body>
 </html>
