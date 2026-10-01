@@ -1,66 +1,90 @@
-# Telegram Username Checker
+# Telegram Community Manager
 
-A small web app that checks whether **public Telegram usernames** are registered
-or available. It queries Telegram's own public `t.me/<username>` preview — the
-same page anyone sees when visiting that link — and reports the result.
+A self-hosted web dashboard for running a **small Telegram community of your own
+consented users** — the people who told you on your platform's signup form that
+they're on Telegram and gave their `@username`.
 
-Useful for:
+It lets you:
 
-- Picking a new, unused handle for yourself, a bot, or a channel.
-- Verifying that a known public account/channel username resolves.
+- **Verify & build a roster** — paste or upload the `@usernames` your users
+  submitted; the app confirms each is a real Telegram account (via Telegram's
+  public `t.me` page, with no action required from the user) and saves the valid
+  ones to a local database. Export the roster as CSV.
+- **Mirror your community group** — a live, two-way feed of your group chat.
+  Members chat in Telegram as normal; you can also post to the group from the
+  dashboard.
+- **Moderate** — see everyone the bot has seen in the group and remove spammers
+  with **Ban** / **Kick**, either from the dashboard or by replying `/ban` /
+  `/kick` to a message in Telegram.
+- **Invite** — generate a group invite link to share from your platform.
 
-## Features
+Everything runs on your machine. Your bot token and all data live in a local
+SQLite file (`data/app.db`) that is **git-ignored and never committed**.
 
-- Paste usernames (one per line) **or upload a file**:
-  - **`.csv`** must have **exactly one column** of usernames (a multi-column
-    file is rejected with the offending line number). A leading `username`
-    header row is ignored.
-  - **`.txt`** is treated as one username per line (also split on commas,
-    semicolons, tabs and spaces).
-  - Entries are de-duplicated.
-- Accepts `name`, `@name`, or `t.me/name` forms.
-- **Download results as CSV** (`input, username, status, available, display_name,
-  type, link`) for easy filtering by available vs. registered.
-- Large lists are processed in polite batches of 50 with a progress bar.
+## What this is NOT
 
-## What it does **not** do
+It only works with usernames your users **gave you with consent**. It does not
+look anyone up by phone number or email, and it is not a bulk
+contact-matching / de-anonymization tool.
 
-This tool intentionally only resolves **public usernames**. It does not look up
-people by phone number or email, and it is not a bulk contact-matching or
-de-anonymization tool. If you want to find which of **your own** contacts are on
-Telegram, use Telegram's built-in contact sync in the official app instead.
+## Telegram Bot API limits worth knowing
 
-Please keep usage reasonable — it talks to Telegram's public endpoint and is
-rate-limited (max 50 names per request) to stay a good citizen. Scraping or bulk
-enumeration may violate [Telegram's Terms of Service](https://core.telegram.org/api/terms).
+These are platform rules, not app choices:
+
+- A bot **can't add people to a group** — they join via an invite link or you add
+  them manually. (Direct-invite-from-platform can come later via invite links.)
+- A bot **can only DM a user who messaged it first**. To chat with an individual
+  user you haven't heard from, use the **Message** button on the roster, which
+  opens `t.me/<username>` so you chat as yourself.
+- A bot **can't fetch old history** — the group feed starts from when the bot is
+  running and is an admin.
+- Accounts **can't be verified by phone** via the Bot API.
 
 ## Run locally
 
-Requires Node.js 18+.
+Requires Node.js 18+ (uses the built-in `node:sqlite`; developed on Node 26).
 
 ```bash
 npm install
 npm start
 ```
 
-Then open **http://localhost:3000**.
+Open **http://localhost:3000**.
 
-For auto-reload during development:
+You can use the **Users** tab (verify + roster + CSV) with no bot token at all.
+The **Group Chat** and **Members** tabs need a bot connected in **Settings**.
 
-```bash
-npm run dev
-```
+## Connect the bot (in the Settings tab)
 
-## How it works
+1. **Create the bot** — [@BotFather](https://t.me/BotFather) → `/newbot` → copy the
+   token into Settings. Then `/setprivacy` → **Disable** (so it can read group
+   messages) and `/setjoingroups` → **Enable**.
+2. **Create a group**, add the bot, and use it as a **supergroup**.
+3. **Make the bot an admin** with at least *Ban users* and *Invite via link*.
+4. Save the token in Settings; your group appears under **Detected groups** —
+   click it to fill the chat ID, then **Save & connect**.
 
-- `POST /api/check` with `{ "usernames": ["durov", "@telegram", "t.me/foo"] }`
-  returns a JSON result per username with status `taken` / `available` /
-  `invalid` / `error`.
-- Existence is determined by whether Telegram's public preview page renders a
-  profile title for that username.
+## HTTP API (all local)
 
-Results are a best-effort signal from a public page; Telegram may change its
-markup, and some handles are reserved.
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/check` | Verify usernames (no save) |
+| POST | `/api/users/import` | Verify + save verified to roster |
+| GET | `/api/users` / `/api/users/export.csv` | Roster list / CSV |
+| DELETE | `/api/users/:id` | Remove a roster entry |
+| GET/POST | `/api/settings` | Read / set bot token + chat ID |
+| GET | `/api/group/messages?sinceId=` | Group feed |
+| POST | `/api/group/send` | Post to the group as the bot |
+| POST | `/api/group/invite` | Create an invite link |
+| GET | `/api/members` | Members the bot has seen |
+| POST | `/api/members/:id/ban` · `/kick` · `/unban` | Moderation |
+
+## Security notes
+
+- Keep this dashboard on `localhost` or behind your own auth — anyone who can
+  reach it can post to your group and ban members. It ships with no login.
+- The bot token grants full control of the bot; the `data/` directory is
+  git-ignored for that reason.
 
 ## License
 

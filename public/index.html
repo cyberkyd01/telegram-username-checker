@@ -3,467 +3,199 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Telegram Username Checker</title>
+    <title>Telegram Community Manager</title>
     <style>
       :root {
-        --bg: #0f1621;
-        --panel: #17212b;
-        --panel-2: #1d2a38;
-        --text: #e8edf2;
-        --muted: #8a9aa9;
-        --accent: #2aabee;
-        --accent-2: #229ed9;
-        --ok: #4bb34b;
-        --warn: #e8a13b;
-        --err: #e5484d;
-        --border: #24313f;
-        --radius: 12px;
+        --bg: #0f1621; --panel: #17212b; --panel-2: #1d2a38; --text: #e8edf2;
+        --muted: #8a9aa9; --accent: #2aabee; --accent-2: #229ed9;
+        --ok: #4bb34b; --warn: #e8a13b; --err: #e5484d; --border: #24313f; --radius: 12px;
       }
       * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        background: radial-gradient(1200px 600px at 50% -10%, #1b2a3a, var(--bg));
-        color: var(--text);
-        min-height: 100vh;
-        padding: 32px 16px;
-      }
-      .wrap { max-width: 720px; margin: 0 auto; }
-      header { text-align: center; margin-bottom: 24px; }
-      .logo {
-        width: 56px; height: 56px; border-radius: 50%;
-        background: linear-gradient(180deg, var(--accent), var(--accent-2));
-        display: inline-flex; align-items: center; justify-content: center;
-        font-size: 28px; margin-bottom: 12px;
-      }
-      h1 { margin: 0 0 6px; font-size: 24px; }
-      .sub { color: var(--muted); font-size: 14px; margin: 0; }
-      .card {
-        background: var(--panel); border: 1px solid var(--border);
-        border-radius: var(--radius); padding: 20px; margin-top: 20px;
-      }
-      label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
-      textarea {
-        width: 100%; min-height: 120px; resize: vertical;
-        background: var(--panel-2); color: var(--text);
-        border: 1px solid var(--border); border-radius: 10px;
-        padding: 12px 14px; font-size: 15px; font-family: inherit; line-height: 1.5;
-      }
-      textarea:focus { outline: none; border-color: var(--accent); }
-      .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+      body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: var(--bg); color: var(--text); min-height: 100vh; }
+      a { color: var(--accent); }
+      .topbar { display: flex; align-items: center; gap: 12px; padding: 14px 18px;
+        background: linear-gradient(180deg, #1b2a3a, var(--bg)); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+      .logo { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(180deg, var(--accent), var(--accent-2));
+        display: inline-flex; align-items: center; justify-content: center; font-size: 18px; }
+      .topbar h1 { font-size: 17px; margin: 0; }
+      .status-pill { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+      .status-pill .d { width: 8px; height: 8px; border-radius: 50%; background: var(--err); }
+      .status-pill.on .d { background: var(--ok); }
+      nav { display: flex; gap: 4px; padding: 0 12px; background: var(--bg); border-bottom: 1px solid var(--border); position: sticky; top: 62px; z-index: 9; }
+      nav button { background: none; border: 0; color: var(--muted); padding: 13px 16px; font-size: 14px; font-weight: 600;
+        cursor: pointer; border-bottom: 2px solid transparent; }
+      nav button.active { color: var(--text); border-bottom-color: var(--accent); }
+      main { max-width: 820px; margin: 0 auto; padding: 22px 16px 60px; }
+      .tab { display: none; } .tab.active { display: block; }
+      .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; }
+      h2 { font-size: 16px; margin: 0 0 4px; } .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+      label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 7px; }
+      textarea, input[type=text], input[type=password], input[type=number] { width: 100%; background: var(--panel-2); color: var(--text);
+        border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; font-size: 14px; font-family: inherit; }
+      textarea { min-height: 96px; resize: vertical; line-height: 1.5; }
+      input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+      .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .spread { justify-content: space-between; }
+      .mt { margin-top: 12px; }
+      button.btn { background: linear-gradient(180deg, var(--accent), var(--accent-2)); color: #fff; border: 0; border-radius: 9px;
+        padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; }
+      button.btn:disabled { opacity: .5; cursor: not-allowed; }
+      button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 9px 14px; font-weight: 500; cursor: pointer; font-size: 13px; }
+      button.danger { color: var(--err); border-color: rgba(229,72,77,.4); background: rgba(229,72,77,.08); }
+      button.tiny { padding: 5px 10px; font-size: 12px; }
       .hint { color: var(--muted); font-size: 12px; }
-      .actions { display: flex; gap: 10px; align-items: center; }
-      button {
-        background: linear-gradient(180deg, var(--accent), var(--accent-2));
-        color: white; border: 0; border-radius: 10px;
-        padding: 11px 22px; font-size: 15px; font-weight: 600; cursor: pointer;
-        transition: transform .05s ease, opacity .2s ease;
-      }
-      button:hover { opacity: .95; }
-      button:active { transform: translateY(1px); }
-      button:disabled { opacity: .5; cursor: not-allowed; }
-      button.ghost {
-        background: transparent; border: 1px solid var(--border); color: var(--text);
-        font-weight: 500;
-      }
-      .uploader {
-        display: flex; align-items: center; gap: 12px; margin-top: 14px;
-        padding: 12px 14px; border: 1px dashed var(--border); border-radius: 10px;
-        background: var(--panel-2);
-      }
-      .uploader label { margin: 0; }
-      .file-btn {
-        display: inline-block; cursor: pointer; font-size: 14px; font-weight: 600;
-        color: var(--accent); background: rgba(42,171,238,.1);
-        padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(42,171,238,.3);
-      }
-      .file-btn:hover { background: rgba(42,171,238,.18); }
+      .file-btn { display: inline-block; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent);
+        background: rgba(42,171,238,.1); padding: 8px 13px; border-radius: 8px; border: 1px solid rgba(42,171,238,.3); }
       #file { display: none; }
-      .file-name { color: var(--muted); font-size: 13px; }
-      .results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 22px; flex-wrap: wrap; }
-      .summary { color: var(--muted); font-size: 13px; }
-      .summary b { color: var(--text); }
-      .results { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
-      .result {
-        display: flex; align-items: center; gap: 12px;
-        background: var(--panel); border: 1px solid var(--border);
-        border-radius: 10px; padding: 12px 14px;
-      }
-      .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-      .result .name { font-weight: 600; }
-      .result .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
-      .result a { color: var(--accent); text-decoration: none; }
-      .result a:hover { text-decoration: underline; }
-      .badge {
-        margin-left: auto; font-size: 12px; font-weight: 600;
-        padding: 4px 10px; border-radius: 999px; white-space: nowrap;
-      }
-      .taken     { color: var(--ok);  background: rgba(75,179,75,.12); }
-      .available { color: var(--accent); background: rgba(42,171,238,.12); }
-      .invalid   { color: var(--warn); background: rgba(232,161,59,.12); }
-      .error     { color: var(--err); background: rgba(229,72,77,.12); }
-      .s-taken .dot { background: var(--ok); }
-      .s-available .dot { background: var(--accent); }
-      .s-invalid .dot { background: var(--warn); }
-      .s-error .dot { background: var(--err); }
-      .progress { height: 6px; border-radius: 999px; background: var(--panel-2); overflow: hidden; margin-top: 12px; display: none; }
-      .progress > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .2s ease; }
-      footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 28px; line-height: 1.6; }
-      .spin { display: inline-block; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.4);
-        border-top-color: #fff; border-radius: 50%; animation: s .7s linear infinite; vertical-align: -2px; margin-right: 8px; }
-      @keyframes s { to { transform: rotate(360deg); } }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+      th { color: var(--muted); font-weight: 600; font-size: 12px; }
+      .badge { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+      .b-verified,.b-member { color: var(--ok); background: rgba(75,179,75,.12); }
+      .b-available { color: var(--accent); background: rgba(42,171,238,.12); }
+      .b-invalid,.b-left { color: var(--warn); background: rgba(232,161,59,.12); }
+      .b-error,.b-banned { color: var(--err); background: rgba(229,72,77,.12); }
+      .result { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--border);
+        border-radius: 9px; padding: 9px 12px; margin-top: 8px; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+      .d-taken .dot,.d-verified .dot { background: var(--ok); } .d-available .dot { background: var(--accent); }
+      .d-invalid .dot { background: var(--warn); } .d-error .dot { background: var(--err); }
+      .result .meta { color: var(--muted); font-size: 12px; }
+      .result .badge { margin-left: auto; }
+      /* chat */
+      #feed { height: 52vh; overflow-y: auto; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+      .msg { max-width: 82%; padding: 7px 11px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); }
+      .msg.me { align-self: flex-end; background: linear-gradient(180deg, #2a6f9e, #246187); border-color: transparent; }
+      .msg .who { font-size: 11px; color: var(--accent); font-weight: 700; margin-bottom: 2px; }
+      .msg.me .who { color: #cfe8ff; }
+      .msg .txt { font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+      .msg .time { font-size: 10px; color: var(--muted); margin-top: 3px; text-align: right; }
+      .msg.svc { align-self: center; background: none; border: 0; color: var(--muted); font-size: 12px; padding: 2px; }
+      .composer { display: flex; gap: 8px; margin-top: 10px; }
+      .composer input { flex: 1; }
+      .banner { padding: 11px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 14px; }
+      .banner.warn { background: rgba(232,161,59,.1); border: 1px solid rgba(232,161,59,.3); color: #f0c27a; }
+      .banner.ok { background: rgba(75,179,75,.1); border: 1px solid rgba(75,179,75,.3); color: #9be09b; }
+      .steps { font-size: 13px; line-height: 1.7; color: var(--text); }
+      .steps code { background: var(--panel-2); padding: 1px 6px; border-radius: 5px; }
+      details summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+      .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--border);
+        padding: 10px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+      .toast.show { opacity: 1; }
+      .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff;
+        border-radius: 50%; animation: s .7s linear infinite; vertical-align: -2px; margin-right: 7px; } @keyframes s { to { transform: rotate(360deg); } }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <header>
-        <div class="logo">✈️</div>
-        <h1>Telegram Username Checker</h1>
-        <p class="sub">Check whether public Telegram usernames are registered or available.</p>
-      </header>
-
-      <div class="card">
-        <label for="input">Usernames (one per line — <code>@name</code>, <code>name</code>, or a <code>t.me/name</code> link)</label>
-        <textarea id="input" placeholder="durov&#10;telegram&#10;@somehandle&#10;t.me/anotherone"></textarea>
-
-        <div class="uploader">
-          <label class="file-btn" for="file">Choose .txt / .csv</label>
-          <input id="file" type="file" accept=".txt,.csv,text/plain,text/csv" />
-          <span class="file-name" id="fileName">CSV must be a single column of usernames · .txt is one per line</span>
-        </div>
-
-        <div class="row">
-          <span class="hint" id="count">0 usernames ready · public info only</span>
-          <div class="actions">
-            <button class="ghost" id="clear">Clear</button>
-            <button id="go">Check</button>
-          </div>
-        </div>
-        <div class="progress" id="progress"><i></i></div>
-      </div>
-
-      <div id="resultsWrap" style="display:none">
-        <div class="results-head">
-          <span class="summary" id="summary"></span>
-          <button class="ghost" id="download">Download CSV</button>
-        </div>
-        <div class="results" id="results"></div>
-      </div>
-
-      <footer>
-        Uses Telegram's public <code>t.me</code> preview — the same information anyone sees visiting the link.<br />
-        For checking your own contacts, use Telegram's built-in contact sync instead.
-      </footer>
+    <div class="topbar">
+      <span class="logo">✈️</span>
+      <h1>Community Manager</h1>
+      <span class="status-pill" id="statusPill"><span class="d"></span><span id="statusText">not connected</span></span>
     </div>
+    <nav>
+      <button data-tab="users" class="active">Users</button>
+      <button data-tab="chat">Group Chat</button>
+      <button data-tab="members">Members</button>
+      <button data-tab="settings">Settings</button>
+    </nav>
 
-    <script>
-      const btn = document.getElementById("go");
-      const input = document.getElementById("input");
-      const out = document.getElementById("results");
-      const resultsWrap = document.getElementById("resultsWrap");
-      const summary = document.getElementById("summary");
-      const downloadBtn = document.getElementById("download");
-      const fileInput = document.getElementById("file");
-      const fileName = document.getElementById("fileName");
-      const countEl = document.getElementById("count");
-      const clearBtn = document.getElementById("clear");
-      const progress = document.getElementById("progress");
-      const progressBar = progress.querySelector("i");
+    <main>
+      <!-- USERS -->
+      <section class="tab active" id="tab-users">
+        <div class="card">
+          <h2>Verify & add your users</h2>
+          <p class="sub">Paste the @usernames your users submitted, or upload a single-column CSV / .txt. Valid ones are saved to your roster — no action needed from them.</p>
+          <textarea id="uInput" placeholder="durov&#10;@telegram&#10;t.me/somehandle"></textarea>
+          <div class="row mt">
+            <label class="file-btn" for="file">Choose .txt / .csv</label>
+            <input id="file" type="file" accept=".txt,.csv,text/plain,text/csv" />
+            <span class="hint" id="fileName">CSV must be a single column · .txt one per line</span>
+          </div>
+          <div class="row spread mt">
+            <span class="hint" id="uCount">0 usernames ready</span>
+            <div class="row">
+              <button class="ghost" id="uClear">Clear</button>
+              <button class="btn" id="uGo">Verify &amp; add</button>
+            </div>
+          </div>
+          <div id="uResults"></div>
+        </div>
 
-      const BATCH_SIZE = 50; // matches the server's per-request cap
-      const MAX_TOTAL = 1000; // sane ceiling for a public-info tool
-      let lastResults = [];
+        <div class="card">
+          <div class="row spread">
+            <div><h2>Roster</h2><p class="sub" style="margin:0">Verified users saved in your database.</p></div>
+            <a class="ghost" href="/api/users/export.csv" style="text-decoration:none">Export CSV</a>
+          </div>
+          <div class="mt" id="rosterWrap"><p class="hint">Loading…</p></div>
+        </div>
+      </section>
 
-      const STATUS_LABEL = {
-        taken: "Registered",
-        available: "Available",
-        invalid: "Invalid",
-        error: "Error",
-      };
+      <!-- GROUP CHAT -->
+      <section class="tab" id="tab-chat">
+        <div id="chatBanner"></div>
+        <div class="card">
+          <div class="row spread">
+            <div><h2>Group chat</h2><p class="sub" style="margin:0">Live mirror of your community group. Members chat in Telegram; you can post here as the bot.</p></div>
+            <button class="ghost tiny" id="inviteBtn">Create invite link</button>
+          </div>
+          <div id="feed" class="mt"><p class="hint">Waiting for messages…</p></div>
+          <div class="composer">
+            <input type="text" id="sendInput" placeholder="Message the group (sent as the bot)…" />
+            <button class="btn" id="sendBtn">Send</button>
+          </div>
+          <p class="hint mt">Note: the feed starts when the bot is running — Telegram doesn't let bots fetch older history.</p>
+        </div>
+      </section>
 
-      const HEADER_WORDS = new Set([
-        "username", "usernames", "handle", "handles", "name", "names", "user", "users",
-      ]);
+      <!-- MEMBERS -->
+      <section class="tab" id="tab-members">
+        <div class="card">
+          <h2>Members &amp; moderation</h2>
+          <p class="sub">People the bot has seen in the group. Remove spammers here, or in Telegram reply to their message with <code>/ban</code> or <code>/kick</code>.</p>
+          <div id="membersWrap"><p class="hint">Loading…</p></div>
+        </div>
+      </section>
 
-      // Pull candidate usernames out of a plain .txt file:
-      // split on newlines, commas, semicolons, tabs and spaces.
-      function parseTokens(text) {
-        return text
-          .split(/[\r\n,;\t ]+/)
-          .map((s) => s.trim())
-          .filter(Boolean);
-      }
+      <!-- SETTINGS -->
+      <section class="tab" id="tab-settings">
+        <div class="card">
+          <h2>Bot connection</h2>
+          <p class="sub">Your token is stored server-side in a local database and never committed to git.</p>
+          <label for="tokenInput">Bot token (from @BotFather)</label>
+          <input type="password" id="tokenInput" placeholder="123456:ABC-..." autocomplete="off" />
+          <p class="hint" id="tokenState"></p>
+          <label class="mt" for="chatInput">Group chat ID</label>
+          <input type="text" id="chatInput" placeholder="-1001234567890" />
+          <p class="hint">Detected groups (add the bot to a group as admin, then pick): <span id="detected">none yet</span></p>
+          <div class="row mt"><button class="btn" id="saveSettings">Save &amp; connect</button><span class="hint" id="settingsMsg"></span></div>
+        </div>
 
-      // Split one CSV line into fields, honouring simple double-quoting.
-      function splitCsvLine(line) {
-        const out = [];
-        let cur = "";
-        let inQ = false;
-        for (let i = 0; i < line.length; i++) {
-          const c = line[i];
-          if (inQ) {
-            if (c === '"') {
-              if (line[i + 1] === '"') { cur += '"'; i++; }
-              else inQ = false;
-            } else cur += c;
-          } else if (c === '"') {
-            inQ = true;
-          } else if (c === ",") {
-            out.push(cur);
-            cur = "";
-          } else {
-            cur += c;
-          }
-        }
-        out.push(cur);
-        return out;
-      }
+        <div class="card">
+          <h2>Setup guide</h2>
+          <details open>
+            <summary>1 · Create the bot</summary>
+            <div class="steps mt">Open <a href="https://t.me/BotFather" target="_blank">@BotFather</a> → <code>/newbot</code> → name it → copy the token into the field above.<br/>
+            Then send <code>/setprivacy</code> → pick your bot → <b>Disable</b> (so it can read group messages), and <code>/setjoingroups</code> → <b>Enable</b>.</div>
+          </details>
+          <details class="mt">
+            <summary>2 · Create the community group</summary>
+            <div class="steps mt">In Telegram: new message → <b>New Group</b> → add your bot → create. Then open the group → edit → <b>convert to / use as a supergroup</b> (ban/history features need a supergroup; adding admins does this automatically).</div>
+          </details>
+          <details class="mt">
+            <summary>3 · Make the bot an admin</summary>
+            <div class="steps mt">Group → <b>Manage group</b> → <b>Administrators</b> → <b>Add admin</b> → your bot. Enable at least <b>Ban users</b> and <b>Invite users via link</b>.</div>
+          </details>
+          <details class="mt">
+            <summary>4 · Get the chat ID</summary>
+            <div class="steps mt">Once the bot is an admin and you’ve saved the token above, the group appears in <b>Detected groups</b> — click it to fill the chat ID. (Send any message in the group first to trigger an update.)</div>
+          </details>
+        </div>
+      </section>
+    </main>
 
-      // Parse a CSV, requiring exactly one column.
-      // Returns { values } on success, or { badLine, badCols } if any
-      // non-empty row has more than one column.
-      function parseCsvSingleColumn(text) {
-        const lines = text.split(/\r?\n/);
-        const values = [];
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].trim() === "") continue;
-          const fields = splitCsvLine(lines[i]);
-          // Ignore trailing empty cells (e.g. a stray trailing comma).
-          while (fields.length && fields[fields.length - 1].trim() === "") fields.pop();
-          if (fields.length > 1) return { badLine: i + 1, badCols: fields.length };
-          values.push((fields[0] || "").trim());
-        }
-        return { values };
-      }
+    <div class="toast" id="toast"></div>
 
-      function currentUsernames() {
-        const seen = new Set();
-        const list = [];
-        for (const t of parseTokens(input.value)) {
-          const key = t.toLowerCase();
-          if (!seen.has(key)) {
-            seen.add(key);
-            list.push(t);
-          }
-        }
-        return list;
-      }
-
-      function refreshCount() {
-        const n = currentUsernames().length;
-        countEl.textContent = `${n} username${n === 1 ? "" : "s"} ready · public info only`;
-      }
-
-      input.addEventListener("input", refreshCount);
-
-      function setFileMsg(text, isError) {
-        fileName.textContent = text;
-        fileName.style.color = isError ? "var(--warn)" : "";
-      }
-
-      fileInput.addEventListener("change", async () => {
-        const file = fileInput.files[0];
-        if (!file) return;
-        const text = await file.text();
-        const isCsv = /\.csv$/i.test(file.name) || file.type === "text/csv";
-
-        let tokens;
-        if (isCsv) {
-          const parsed = parseCsvSingleColumn(text);
-          if (parsed.badLine) {
-            setFileMsg(
-              `${file.name} — rejected: line ${parsed.badLine} has ${parsed.badCols} columns. The CSV must have exactly one column of usernames.`,
-              true
-            );
-            fileInput.value = "";
-            return;
-          }
-          tokens = parsed.values.filter(Boolean);
-        } else {
-          tokens = parseTokens(text);
-        }
-
-        // Drop a leading header cell like "username" if present.
-        if (tokens.length && HEADER_WORDS.has(tokens[0].toLowerCase())) tokens.shift();
-
-        if (tokens.length === 0) {
-          setFileMsg(`${file.name} — no usernames found in the file.`, true);
-          fileInput.value = "";
-          return;
-        }
-
-        const existing = input.value.trim();
-        input.value = (existing ? existing + "\n" : "") + tokens.join("\n");
-        setFileMsg(`${file.name} — added ${tokens.length} usernames`, false);
-        refreshCount();
-        fileInput.value = ""; // allow re-selecting the same file
-      });
-
-      clearBtn.addEventListener("click", () => {
-        input.value = "";
-        setFileMsg("CSV must be a single column of usernames · .txt is one per line", false);
-        resultsWrap.style.display = "none";
-        out.innerHTML = "";
-        lastResults = [];
-        refreshCount();
-      });
-
-      function render(results) {
-        out.innerHTML = "";
-        for (const r of results) {
-          const el = document.createElement("div");
-          el.className = `result s-${r.status}`;
-
-          const dot = document.createElement("span");
-          dot.className = "dot";
-          el.appendChild(dot);
-
-          const body = document.createElement("div");
-          const title = document.createElement("div");
-          title.className = "name";
-          title.textContent = r.displayName || r.username || r.input;
-          body.appendChild(title);
-
-          const meta = document.createElement("div");
-          meta.className = "meta";
-          if (r.status === "taken") {
-            meta.innerHTML =
-              `@${r.username}` +
-              (r.type ? ` · ${r.type}` : "") +
-              ` · <a href="${r.link}" target="_blank" rel="noopener">open</a>`;
-          } else if (r.status === "available") {
-            meta.textContent = `@${r.username} — no account found`;
-          } else {
-            meta.textContent = r.detail || "";
-          }
-          body.appendChild(meta);
-          el.appendChild(body);
-
-          const badge = document.createElement("span");
-          badge.className = `badge ${r.status}`;
-          badge.textContent = STATUS_LABEL[r.status] || r.status;
-          el.appendChild(badge);
-
-          out.appendChild(el);
-        }
-      }
-
-      function renderSummary(results) {
-        const by = { taken: 0, available: 0, invalid: 0, error: 0 };
-        for (const r of results) by[r.status] = (by[r.status] || 0) + 1;
-        summary.innerHTML =
-          `<b>${results.length}</b> checked · ` +
-          `<b>${by.available}</b> available · ` +
-          `<b>${by.taken}</b> registered · ` +
-          `<b>${by.invalid}</b> invalid · ` +
-          `<b>${by.error}</b> errors`;
-      }
-
-      function csvEscape(v) {
-        const s = v == null ? "" : String(v);
-        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-      }
-
-      function toCsv(results) {
-        const header = ["input", "username", "status", "available", "display_name", "type", "link"];
-        const rows = results.map((r) =>
-          [
-            r.input,
-            r.username || "",
-            r.status,
-            r.status === "available" ? "yes" : r.status === "taken" ? "no" : "",
-            r.displayName || "",
-            r.type || "",
-            r.link || "",
-          ]
-            .map(csvEscape)
-            .join(",")
-        );
-        return [header.join(","), ...rows].join("\r\n");
-      }
-
-      downloadBtn.addEventListener("click", () => {
-        if (!lastResults.length) return;
-        const blob = new Blob([toCsv(lastResults)], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-        a.href = url;
-        a.download = `telegram-username-results-${stamp}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      });
-
-      async function checkBatch(usernames) {
-        const res = await fetch("/api/check", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ usernames }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Request failed");
-        return data.results;
-      }
-
-      async function run() {
-        let usernames = currentUsernames();
-
-        if (usernames.length === 0) {
-          resultsWrap.style.display = "block";
-          summary.textContent = "";
-          out.innerHTML = `<div class="result s-invalid"><span class="dot"></span><div><div class="name">Nothing to check</div><div class="meta">Enter or upload at least one username.</div></div></div>`;
-          return;
-        }
-        if (usernames.length > MAX_TOTAL) {
-          resultsWrap.style.display = "block";
-          out.innerHTML = `<div class="result s-invalid"><span class="dot"></span><div><div class="name">Too many usernames</div><div class="meta">Limit is ${MAX_TOTAL} per run — you have ${usernames.length}.</div></div></div>`;
-          return;
-        }
-
-        btn.disabled = true;
-        clearBtn.disabled = true;
-        btn.innerHTML = `<span class="spin"></span>Checking…`;
-        resultsWrap.style.display = "block";
-        out.innerHTML = "";
-        lastResults = [];
-
-        const showProgress = usernames.length > BATCH_SIZE;
-        if (showProgress) {
-          progress.style.display = "block";
-          progressBar.style.width = "0%";
-        }
-
-        try {
-          const all = [];
-          for (let i = 0; i < usernames.length; i += BATCH_SIZE) {
-            const chunk = usernames.slice(i, i + BATCH_SIZE);
-            const results = await checkBatch(chunk);
-            all.push(...results);
-            lastResults = all.slice();
-            render(all);
-            renderSummary(all);
-            if (showProgress) {
-              progressBar.style.width = `${Math.round((all.length / usernames.length) * 100)}%`;
-            }
-          }
-        } catch (err) {
-          out.innerHTML = `<div class="result s-error"><span class="dot"></span><div><div class="name">Something went wrong</div><div class="meta">${err.message}</div></div></div>`;
-        } finally {
-          btn.disabled = false;
-          clearBtn.disabled = false;
-          btn.textContent = "Check";
-          setTimeout(() => (progress.style.display = "none"), 600);
-        }
-      }
-
-      btn.addEventListener("click", run);
-      input.addEventListener("keydown", (e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run();
-      });
-
-      refreshCount();
-    </script>
+    <script src="/app.js"></script>
   </body>
 </html>

@@ -3,3 +3,6 @@ npm-debug.log*
 .DS_Store
 .env
 *.local
+
+# Local database (contains the bot token + group data) — never commit
+data/
