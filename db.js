@@ -50,6 +50,13 @@ db.exec(`
     via           TEXT DEFAULT 'telegram', -- telegram | interface
     date          INTEGER
   );
+
+  CREATE TABLE IF NOT EXISTS counters (
+    day  TEXT,
+    kind TEXT,
+    n    INTEGER DEFAULT 0,
+    PRIMARY KEY(day, kind)
+  );
 `);
 
 // --- settings -------------------------------------------------------------
@@ -61,6 +68,53 @@ export function setSetting(key, value) {
   db.prepare(
     "INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
   ).run(key, value == null ? null : String(value));
+}
+
+// --- safe mode + daily counters ------------------------------------------
+// Conservative defaults; all tunable from the Settings tab.
+const SAFE_DEFAULTS = {
+  enabled: true,
+  verifyDelayMs: 1200,    // pause between public t.me checks
+  verifyConcurrency: 1,   // one at a time
+  verifyDailyCap: 200,    // max public checks per day
+  actionMinGapMs: 1000,   // min gap between bot actions
+  actionDailyCap: 500,    // max bot actions (send/ban/invite) per day
+  onboardDailyCap: 25,    // manual-add budget you pace yourself against
+};
+const FAST = { verifyDelayMs: 150, verifyConcurrency: 5, actionMinGapMs: 0 };
+
+export function getSafeConfig() {
+  const raw = getSetting("safe_config");
+  let stored = {};
+  try { stored = raw ? JSON.parse(raw) : {}; } catch { stored = {}; }
+  return { ...SAFE_DEFAULTS, ...stored };
+}
+export function setSafeConfig(patch) {
+  const merged = { ...getSafeConfig(), ...patch };
+  setSetting("safe_config", JSON.stringify(merged));
+  return merged;
+}
+/** Active knobs given whether safe mode is on. Caps are null when off. */
+export function effectiveLimits() {
+  const c = getSafeConfig();
+  if (!c.enabled) {
+    return { safe: false, verifyDelayMs: FAST.verifyDelayMs, verifyConcurrency: FAST.verifyConcurrency,
+      verifyDailyCap: null, actionMinGapMs: FAST.actionMinGapMs, actionDailyCap: null, onboardDailyCap: null };
+  }
+  return { safe: true, verifyDelayMs: c.verifyDelayMs, verifyConcurrency: c.verifyConcurrency,
+    verifyDailyCap: c.verifyDailyCap, actionMinGapMs: c.actionMinGapMs, actionDailyCap: c.actionDailyCap,
+    onboardDailyCap: c.onboardDailyCap };
+}
+
+const today = () => new Date().toISOString().slice(0, 10);
+export function incrCounter(kind, by = 1) {
+  db.prepare(
+    "INSERT INTO counters(day, kind, n) VALUES(?, ?, ?) ON CONFLICT(day, kind) DO UPDATE SET n = n + excluded.n"
+  ).run(today(), kind, by);
+}
+export function getCounter(kind) {
+  const r = db.prepare("SELECT n FROM counters WHERE day = ? AND kind = ?").get(today(), kind);
+  return r ? r.n : 0;
 }
 
 // --- users / roster -------------------------------------------------------

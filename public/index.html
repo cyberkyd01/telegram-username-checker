@@ -80,6 +80,19 @@
       .steps { font-size: 13px; line-height: 1.7; color: var(--text); }
       .steps code { background: var(--panel-2); padding: 1px 6px; border-radius: 5px; }
       details summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+      .grid label { margin-bottom: 4px; }
+      .grid input { padding: 8px 10px; }
+      .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
+      .switch input { width: 36px; height: 20px; appearance: none; background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; position: relative; cursor: pointer; transition: background .2s; }
+      .switch input:checked { background: var(--accent); border-color: var(--accent); }
+      .switch input::after { content: ""; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .2s; }
+      .switch input:checked::after { left: 17px; }
+      .meter { margin: 8px 0; }
+      .meter .lab { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+      .meter .bar { height: 7px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
+      .meter .bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+      .meter.hot .bar > i { background: linear-gradient(90deg, var(--warn), var(--err)); }
       .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--border);
         padding: 10px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
       .toast.show { opacity: 1; }
@@ -146,6 +159,17 @@
           </div>
           <p class="hint mt">Note: the feed starts when the bot is running — Telegram doesn't let bots fetch older history.</p>
         </div>
+
+        <div class="card">
+          <h2>Safe onboarding budget</h2>
+          <p class="sub">Adding many people quickly from your own account is what gets accounts flagged. Add slowly, prefer the invite link above, and record each batch here so the meter keeps you under today's safe limit.</p>
+          <div id="onboardMeter"></div>
+          <div class="row mt">
+            <button class="ghost" data-add="1">Recorded +1 add</button>
+            <button class="ghost" data-add="5">+5</button>
+            <span class="hint" id="onboardMsg"></span>
+          </div>
+        </div>
       </section>
 
       <!-- MEMBERS -->
@@ -169,6 +193,24 @@
           <input type="text" id="chatInput" placeholder="-1001234567890" />
           <p class="hint">Detected groups (add the bot to a group as admin, then pick): <span id="detected">none yet</span></p>
           <div class="row mt"><button class="btn" id="saveSettings">Save &amp; connect</button><span class="hint" id="settingsMsg"></span></div>
+        </div>
+
+        <div class="card">
+          <div class="row spread">
+            <div><h2>Safe mode</h2><p class="sub" style="margin:0">Throttles everything this app does so it stays under Telegram's limits.</p></div>
+            <label class="switch"><input type="checkbox" id="safeToggle" /> Enabled</label>
+          </div>
+          <div id="safeUsage" class="mt"></div>
+          <div class="grid mt">
+            <div><label>Delay between checks (ms)</label><input type="number" id="s_verifyDelayMs" min="0" /></div>
+            <div><label>Checks at once</label><input type="number" id="s_verifyConcurrency" min="1" /></div>
+            <div><label>Max checks / day</label><input type="number" id="s_verifyDailyCap" min="1" /></div>
+            <div><label>Gap between bot actions (ms)</label><input type="number" id="s_actionMinGapMs" min="0" /></div>
+            <div><label>Max bot actions / day</label><input type="number" id="s_actionDailyCap" min="1" /></div>
+            <div><label>Manual-add budget / day</label><input type="number" id="s_onboardDailyCap" min="1" /></div>
+          </div>
+          <div class="row mt"><button class="btn" id="saveSafe">Save safe settings</button><span class="hint" id="safeMsg"></span></div>
+          <p class="hint mt">Heads-up: this app can only throttle what <i>it</i> does. It can't control adds you make in the Telegram app directly — the manual-add budget is there to help you pace those yourself.</p>
         </div>
 
         <div class="card">

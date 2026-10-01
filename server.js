@@ -11,9 +11,7 @@ const PORT = process.env.PORT || 3000;
 
 // --- Config ---------------------------------------------------------------
 const MAX_BATCH = 50;
-const CONCURRENCY = 5;
 const REQUEST_TIMEOUT_MS = 8000;
-const POLITE_DELAY_MS = 150;
 const USERNAME_RE = /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/;
 
 app.use(express.json({ limit: "256kb" }));
@@ -74,17 +72,17 @@ async function checkUsername(rawInput) {
   }
 }
 
-async function mapWithConcurrency(items, limit, fn) {
+async function mapWithConcurrency(items, limit, fn, delayMs = 0) {
   const results = new Array(items.length);
   let next = 0;
   async function worker() {
     while (next < items.length) {
       const i = next++;
       results[i] = await fn(items[i], i);
-      if (POLITE_DELAY_MS) await new Promise((r) => setTimeout(r, POLITE_DELAY_MS));
+      if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
     }
   }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
   return results;
 }
 
@@ -93,13 +91,27 @@ function cleanList(list) {
   return list.map((x) => String(x).trim()).filter(Boolean);
 }
 
+// Apply the safe-mode daily verification cap; returns the slice we may run.
+function applyVerifyCap(cleaned) {
+  const lim = store.effectiveLimits();
+  if (lim.verifyDailyCap == null) return { toRun: cleaned, skipped: 0, lim };
+  const remaining = Math.max(0, lim.verifyDailyCap - store.getCounter("verify"));
+  if (remaining <= 0) return { toRun: [], skipped: cleaned.length, lim, capped: true };
+  if (cleaned.length > remaining) return { toRun: cleaned.slice(0, remaining), skipped: cleaned.length - remaining, lim };
+  return { toRun: cleaned, skipped: 0, lim };
+}
+
 app.post("/api/check", async (req, res) => {
   const cleaned = cleanList(req.body?.usernames);
   if (!cleaned) return res.status(400).json({ error: "Body must be { usernames: string[] }." });
   if (cleaned.length === 0) return res.status(400).json({ error: "No usernames provided." });
   if (cleaned.length > MAX_BATCH) return res.status(400).json({ error: `Max ${MAX_BATCH} usernames per request.` });
-  const results = await mapWithConcurrency(cleaned, CONCURRENCY, checkUsername);
-  res.json({ count: results.length, results });
+
+  const { toRun, skipped, lim, capped } = applyVerifyCap(cleaned);
+  if (capped) return res.status(429).json({ error: `Safe mode: daily verification limit (${lim.verifyDailyCap}) reached. Raise it in Settings or wait until tomorrow.` });
+  const results = await mapWithConcurrency(toRun, lim.verifyConcurrency, checkUsername, lim.verifyDelayMs);
+  store.incrCounter("verify", toRun.length);
+  res.json({ count: results.length, results, skipped });
 });
 
 // =========================================================================
@@ -114,14 +126,17 @@ app.post("/api/users/import", async (req, res) => {
   if (cleaned.length === 0) return res.status(400).json({ error: "No usernames provided." });
   if (cleaned.length > MAX_BATCH) return res.status(400).json({ error: `Max ${MAX_BATCH} usernames per request.` });
 
-  const results = await mapWithConcurrency(cleaned, CONCURRENCY, checkUsername);
+  const { toRun, skipped, lim, capped } = applyVerifyCap(cleaned);
+  if (capped) return res.status(429).json({ error: `Safe mode: daily verification limit (${lim.verifyDailyCap}) reached. Raise it in Settings or wait until tomorrow.` });
+  const results = await mapWithConcurrency(toRun, lim.verifyConcurrency, checkUsername, lim.verifyDelayMs);
+  store.incrCounter("verify", toRun.length);
   for (const r of results) {
     if (r.status === "taken") {
       store.upsertUser({ username: r.username, display_name: r.displayName, status: "verified" });
       r.saved = true;
     }
   }
-  res.json({ count: results.length, results });
+  res.json({ count: results.length, results, skipped });
 });
 
 app.delete("/api/users/:id", (req, res) => {
@@ -168,6 +183,64 @@ app.post("/api/settings", async (req, res) => {
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+// =========================================================================
+// Safe mode (rate-limit protection) + onboarding budget
+// =========================================================================
+function buildSafePayload() {
+  const config = store.getSafeConfig();
+  const lim = store.effectiveLimits();
+  return {
+    config,
+    usage: {
+      verify: { used: store.getCounter("verify"), cap: lim.verifyDailyCap },
+      action: { used: store.getCounter("action"), cap: lim.actionDailyCap },
+      onboard: { used: store.getCounter("onboard"), cap: lim.onboardDailyCap },
+    },
+  };
+}
+
+function sanitizeSafePatch(body) {
+  const patch = {};
+  if (typeof body.enabled === "boolean") patch.enabled = body.enabled;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(Number(v))));
+  const nums = {
+    verifyDelayMs: [0, 10000],
+    verifyConcurrency: [1, 10],
+    verifyDailyCap: [1, 100000],
+    actionMinGapMs: [0, 10000],
+    actionDailyCap: [1, 100000],
+    onboardDailyCap: [1, 100000],
+  };
+  for (const [k, [lo, hi]] of Object.entries(nums)) {
+    if (body[k] !== undefined && body[k] !== null && body[k] !== "" && !Number.isNaN(Number(body[k]))) {
+      patch[k] = clamp(body[k], lo, hi);
+    }
+  }
+  return patch;
+}
+
+app.get("/api/safe", (_req, res) => res.json(buildSafePayload()));
+
+app.post("/api/safe", (req, res) => {
+  store.setSafeConfig(sanitizeSafePatch(req.body || {}));
+  res.json(buildSafePayload());
+});
+
+// Manual onboarding budget: you record people you've added yourself, so the
+// meter keeps your manual adds under a daily threshold.
+app.post("/api/onboard/use", (req, res) => {
+  const n = Math.max(1, Math.min(100, Math.round(Number(req.body?.n) || 1)));
+  const lim = store.effectiveLimits();
+  const used = store.getCounter("onboard");
+  if (lim.onboardDailyCap != null && used >= lim.onboardDailyCap) {
+    return res.status(429).json({ error: `You've hit today's safe onboarding budget (${lim.onboardDailyCap}). Pause adds until tomorrow to protect your account.`, ...buildSafePayload() });
+  }
+  store.incrCounter("onboard", n);
+  const payload = buildSafePayload();
+  const over = lim.onboardDailyCap != null && payload.usage.onboard.used >= lim.onboardDailyCap;
+  res.json({ ok: true, over, ...payload });
 });
 
 // =========================================================================

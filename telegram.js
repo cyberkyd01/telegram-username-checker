@@ -29,21 +29,53 @@ export function status() {
   };
 }
 
+// Serialize bot calls and keep a minimum gap between them (safe-mode paced).
+let actionChain = Promise.resolve();
+let lastCallAt = 0;
+function paced(fn) {
+  const run = async () => {
+    const gap = store.effectiveLimits().actionMinGapMs || 0;
+    const wait = Math.max(0, lastCallAt + gap - Date.now());
+    if (wait) await sleep(wait);
+    lastCallAt = Date.now();
+    return fn();
+  };
+  actionChain = actionChain.then(run, run);
+  return actionChain;
+}
+
 export async function call(method, params = {}) {
   if (!state.token) throw new Error("No bot token configured.");
-  const res = await fetch(`${API}/bot${state.token}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
+  return paced(async () => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await fetch(`${API}/bot${state.token}/${method}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      });
+      const data = await res.json();
+      if (data.ok) return data.result;
+
+      // Respect Telegram flood control instead of hammering.
+      if (data.error_code === 429 && data.parameters?.retry_after != null && attempt < 2) {
+        await sleep((data.parameters.retry_after + 1) * 1000);
+        continue;
+      }
+      const err = new Error(data.description || `Telegram API error (${method})`);
+      err.code = data.error_code;
+      throw err;
+    }
   });
-  const data = await res.json();
-  if (!data.ok) {
-    const msg = data.description || `Telegram API error (${method})`;
-    const err = new Error(msg);
-    err.code = data.error_code;
-    throw err;
+}
+
+// Block an outward action once the daily safe cap is hit.
+function enforceActionCap() {
+  const lim = store.effectiveLimits();
+  if (lim.actionDailyCap != null && store.getCounter("action") >= lim.actionDailyCap) {
+    const e = new Error(`Safe mode: daily action limit (${lim.actionDailyCap}) reached. Raise it in Settings or wait until tomorrow.`);
+    e.safe = true;
+    throw e;
   }
-  return data.result;
 }
 
 /** Validate a token and remember the bot identity (does not start polling). */
@@ -289,7 +321,9 @@ async function reply(msg, text) {
 // --- actions used by the HTTP interface -----------------------------------
 export async function sendToGroup(text) {
   if (!state.chatId) throw new Error("No group chat configured.");
+  enforceActionCap();
   const sent = await call("sendMessage", { chat_id: state.chatId, text });
+  store.incrCounter("action");
   const id = store.addMessage({
     tg_message_id: sent.message_id,
     from_id: state.botId,
@@ -305,6 +339,8 @@ export async function sendToGroup(text) {
 
 export async function banMember(userId, { kick = false } = {}) {
   if (!state.chatId) throw new Error("No group chat configured.");
+  enforceActionCap();
+  store.incrCounter("action");
   await call("banChatMember", { chat_id: state.chatId, user_id: userId });
   if (kick) {
     await call("unbanChatMember", { chat_id: state.chatId, user_id: userId, only_if_banned: true });
@@ -322,6 +358,8 @@ export async function unbanMember(userId) {
 
 export async function createInvite({ memberLimit } = {}) {
   if (!state.chatId) throw new Error("No group chat configured.");
+  enforceActionCap();
+  store.incrCounter("action");
   const params = { chat_id: state.chatId, creates_join_request: false };
   if (memberLimit) params.member_limit = memberLimit;
   const link = await call("createChatInviteLink", params);

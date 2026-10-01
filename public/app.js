@@ -30,9 +30,9 @@ tabs.forEach((b) =>
 );
 function onTab(name) {
   if (name === "users") loadRoster();
-  if (name === "chat") { loadFeed(true); startFeedPolling(); } else stopFeedPolling();
+  if (name === "chat") { loadFeed(true); startFeedPolling(); loadOnboard(); } else stopFeedPolling();
   if (name === "members") loadMembers();
-  if (name === "settings") loadSettings();
+  if (name === "settings") { loadSettings(); loadSafe(); }
 }
 
 // ---------- status pill ----------
@@ -104,17 +104,21 @@ $("uGo").addEventListener("click", async () => {
   if (!usernames.length) { toast("Enter or upload at least one username."); return; }
   const btn = $("uGo"); btn.disabled = true; btn.innerHTML = `<span class="spin"></span>Verifying…`;
   const out = $("uResults"); out.innerHTML = "";
+  let skippedTotal = 0;
   try {
     const all = [];
     for (let i = 0; i < usernames.length; i += 50) {
-      const { results } = await api("/api/users/import", {
+      const resp = await api("/api/users/import", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ usernames: usernames.slice(i, i + 50) }),
       });
-      all.push(...results); renderCheck(all);
+      all.push(...resp.results); renderCheck(all);
+      if (resp.skipped) { skippedTotal += resp.skipped; break; }
     }
     const added = all.filter((r) => r.saved).length;
-    toast(`${added} verified and added to roster.`);
+    toast(skippedTotal
+      ? `${added} added. ${skippedTotal} skipped — daily safe limit reached.`
+      : `${added} verified and added to roster.`);
     loadRoster();
   } catch (e) { toast(e.message); }
   finally { btn.disabled = false; btn.textContent = "Verify & add"; }
@@ -261,6 +265,56 @@ $("saveSettings").addEventListener("click", async () => {
   } catch (e) { $("settingsMsg").textContent = ""; toast(e.message); }
   finally { btn.disabled = false; }
 });
+
+// ---------- SAFE MODE + ONBOARDING ----------
+function meterHtml(label, used, cap) {
+  const has = cap != null;
+  const pct = has ? Math.min(100, Math.round((used / cap) * 100)) : 0;
+  const hot = has && pct >= 80 ? " hot" : "";
+  return `<div class="meter${hot}"><div class="lab"><span>${label}</span><span>${used}${has ? " / " + cap : " (no cap)"}</span></div>
+    <div class="bar"><i style="width:${has ? pct : 0}%"></i></div></div>`;
+}
+const SAFE_FIELDS = ["verifyDelayMs","verifyConcurrency","verifyDailyCap","actionMinGapMs","actionDailyCap","onboardDailyCap"];
+
+async function loadSafe() {
+  try {
+    const s = await api("/api/safe");
+    $("safeToggle").checked = !!s.config.enabled;
+    SAFE_FIELDS.forEach((f) => { const el = $("s_" + f); if (el) el.value = s.config[f]; });
+    $("safeUsage").innerHTML =
+      meterHtml("Verifications today", s.usage.verify.used, s.usage.verify.cap) +
+      meterHtml("Bot actions today", s.usage.action.used, s.usage.action.cap) +
+      meterHtml("Manual adds today", s.usage.onboard.used, s.usage.onboard.cap);
+  } catch (e) { /* ignore */ }
+}
+$("safeToggle").addEventListener("change", () => saveSafe());
+$("saveSafe").addEventListener("click", () => saveSafe(true));
+async function saveSafe(fromButton) {
+  const body = { enabled: $("safeToggle").checked };
+  SAFE_FIELDS.forEach((f) => { const v = $("s_" + f).value; if (v !== "") body[f] = Number(v); });
+  try {
+    await api("/api/safe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    $("safeMsg").textContent = "Saved."; setTimeout(() => ($("safeMsg").textContent = ""), 2000);
+    loadSafe(); if (fromButton) toast("Safe settings saved.");
+  } catch (e) { toast(e.message); }
+}
+
+async function loadOnboard() {
+  try {
+    const s = await api("/api/safe");
+    $("onboardMeter").innerHTML = meterHtml("Manual adds today", s.usage.onboard.used, s.usage.onboard.cap);
+  } catch (e) { /* ignore */ }
+}
+document.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", async () => {
+  try {
+    const r = await api("/api/onboard/use", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ n: Number(b.dataset.add) }) });
+    $("onboardMeter").innerHTML = meterHtml("Manual adds today", r.usage.onboard.used, r.usage.onboard.cap);
+    toast(r.over ? "You've reached today's safe add budget — pause until tomorrow." : "Recorded.");
+  } catch (e) {
+    // 429 returns the payload too, so refresh the meter
+    loadOnboard(); toast(e.message);
+  }
+}));
 
 // ---------- boot ----------
 refreshStatus();

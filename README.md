@@ -27,6 +27,25 @@ It only works with usernames your users **gave you with consent**. It does not
 look anyone up by phone number or email, and it is not a bulk
 contact-matching / de-anonymization tool.
 
+## Safe mode (rate-limit protection)
+
+On by default, tunable in **Settings → Safe mode**. It paces everything the app
+does so you stay well under Telegram's limits:
+
+- **Verification throttle** — public `t.me` checks run one at a time with a delay
+  and a daily cap (default 200/day). Over the cap, extra names are skipped with a
+  clear message.
+- **Bot-action pacing** — a minimum gap between bot calls, automatic handling of
+  Telegram's `429 retry_after` (it waits instead of retrying blindly), and a daily
+  action cap (default 500).
+- **Manual-add budget** — a daily counter + meter (default 25) for people you add
+  **yourself** in the Telegram app. The app can't throttle the native client, so
+  this is a self-paced budget: record each batch you add, and the meter warns you
+  before you reach the threshold that gets accounts flagged. Prefer invite links
+  over direct adds.
+
+Turning safe mode off removes all caps (throttles drop to minimal).
+
 ## Telegram Bot API limits worth knowing
 
 These are platform rules, not app choices:
