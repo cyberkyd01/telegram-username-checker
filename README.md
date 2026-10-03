@@ -4,6 +4,8 @@ A self-hosted web dashboard for running a **small Telegram community of your own
 consented users** — the people who told you on your platform's signup form that
 they're on Telegram and gave their `@username`.
 
+> **Deploying to a server?** Follow the step-by-step VPS guide: **[DEPLOY.md](DEPLOY.md)**
+
 It lets you:
 
 - **Verify & build a roster** — paste or upload the `@usernames` your users
