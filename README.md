@@ -110,3 +110,11 @@ The **Group Chat** and **Members** tabs need a bot connected in **Settings**.
 ## License
 
 MIT
+
+---
+
+## ⭐ Support
+
+Please give stars and if possible Buy me a coffee (USDT-TRC20) - `TA216k3WgWTrKnUKxZrSDNGzSJj3eHtEcH`
+
+Telegram: [@Cyberkyd](https://t.me/Cyberkyd)
